@@ -1,0 +1,9 @@
+# Enforce LF line endings for text files to avoid CRLF warnings
+* text=auto eol=lf
+
+# Force binary files unchanged
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
