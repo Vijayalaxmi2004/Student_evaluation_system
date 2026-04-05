@@ -10,6 +10,11 @@ import plotly.express as px
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+from ai_service import (
+    analyze_feedback_sentiment, generate_personalized_recommendations,
+    predict_attendance_trend, advanced_grade_prediction, analyze_subject_performance,
+    generate_ai_insights_report, detect_at_risk_students
+)
 
 # ---------- CSS ----------
 def load_css():
@@ -218,7 +223,7 @@ def student_dashboard():
 
     # Tabs
     tabs = ["📊 Marks","📅 Attendance","� Mid Exams","�📈 Progress","📝 Feedback",
-        "📢 Announcements","💬 Messages","⚠️ Alerts","🤖 AI Prediction"]
+        "📢 Announcements","💬 Messages","⚠️ Alerts","🤖 AI Prediction", "📊 AI Insights", "🎯 AI Plan"]
     
     # Split tabs into rows of 3 for better layout (9 tabs = 3 rows of 3)
     rows = [tabs[i:i+3] for i in range(0, len(tabs), 3)]
@@ -333,23 +338,73 @@ def student_dashboard():
     # ---------- Feedback ----------
     elif tab == "📝 Feedback":
         if not os.path.exists(FEEDBACK_FILE):
-            pd.DataFrame(columns=["rollno","year","semester","feedback"]).to_csv(FEEDBACK_FILE, index=False)
+            pd.DataFrame(columns=["rollno","year","semester","feedback","rating","subject_rating","faculty_rating","date"]).to_csv(FEEDBACK_FILE, index=False)
 
+        st.subheader("📝 Submit Feedback with Ratings")
+        
         with st.form("feedback_form"):
-            year = st.selectbox("Year", [1,2,3,4])
-            semester = st.selectbox("Semester", [1,2])
-            feedback_text = st.text_area("Your Feedback")
+            col1, col2 = st.columns(2)
+            with col1:
+                year = st.selectbox("Year", [1,2,3,4])
+                semester = st.selectbox("Semester", [1,2])
+            with col2:
+                subject_rating = st.slider("Subject Rating", 1, 5, 4, help="Rate the subject content")
+                faculty_rating = st.slider("Faculty Rating", 1, 5, 4, help="Rate the faculty teaching")
+            
+            feedback_text = st.text_area("Your Feedback", height=120, placeholder="Share your thoughts about the course and faculty...")
+            overall_rating = st.slider("Overall Experience", 1, 5, 4, help="Overall course experience")
 
-            if st.form_submit_button("Submit"):
-                df_fb = pd.read_csv(FEEDBACK_FILE)
-                new = pd.DataFrame([{
-                    "rollno": st.session_state.username,
-                    "year": year,
-                    "semester": semester,
-                    "feedback": feedback_text
-                }])
-                pd.concat([df_fb, new]).to_csv(FEEDBACK_FILE, index=False)
-                st.success("Feedback submitted successfully ✅")
+            if st.form_submit_button("Submit Feedback"):
+                if not feedback_text.strip():
+                    st.error("Please write some feedback")
+                else:
+                    df_fb = pd.read_csv(FEEDBACK_FILE)
+                    new = pd.DataFrame([{
+                        "rollno": st.session_state.username,
+                        "year": year,
+                        "semester": semester,
+                        "feedback": feedback_text,
+                        "rating": overall_rating,
+                        "subject_rating": subject_rating,
+                        "faculty_rating": faculty_rating,
+                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }])
+                    pd.concat([df_fb, new], ignore_index=True).to_csv(FEEDBACK_FILE, index=False)
+                    
+                    # AI Sentiment Analysis
+                    polarity, sentiment, subjectivity = analyze_feedback_sentiment(feedback_text)
+                    st.success(f"✅ Feedback submitted! Sentiment: {sentiment}")
+                    
+                    with st.expander("📊 Feedback Analysis"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Sentiment Score", f"{polarity:.2f}", help="Range: -1 (negative) to 1 (positive)")
+                        with col2:
+                            st.metric("Subjectivity", f"{subjectivity:.2f}", help="How subjective is your feedback")
+                        with col3:
+                            st.metric("Overall Rating", f"{overall_rating}/5 ⭐")
+        
+        # View previous feedback with sentiment
+        st.subheader("Your Previous Feedback")
+        df_fb = pd.read_csv(FEEDBACK_FILE)
+        my_feedback = df_fb[df_fb['rollno'].astype(str).str.lower() == st.session_state.username.strip().lower()]
+        
+        if not my_feedback.empty:
+            for idx, row in my_feedback.tail(5).iterrows():
+                with st.expander(f"📅 {row.get('date', 'No date')} - Year {row['year']} Sem {row['semester']}"):
+                    st.write(row['feedback'])
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Overall Rating", f"{row.get('rating', 'N/A')}/5 ⭐")
+                    with col2:
+                        polarity, sentiment, _ = analyze_feedback_sentiment(row['feedback'])
+                        st.metric("Sentiment", sentiment)
+                    with col3:
+                        st.metric("Subject Rating", f"{row.get('subject_rating', 'N/A')}/5")
+                    with col4:
+                        st.metric("Faculty Rating", f"{row.get('faculty_rating', 'N/A')}/5")
+        else:
+            st.info("No feedback submitted yet.")
 
     # ---------- Announcements ----------
     elif tab == "📢 Announcements":
@@ -373,11 +428,140 @@ def student_dashboard():
 
     # ---------- AI Prediction ----------
     elif tab == "🤖 AI Prediction":
-        st.subheader("🤖 Next Semester SGPA Prediction")
-        pred, r2, feat_imp = ai_prediction(st.session_state.username)
-        if pred is not None:
-            st.success(f"Predicted Next Semester SGPA: {pred} (R² Score: {round(r2,2)})")
-            st.subheader("Feature Importance")
-            st.dataframe(feat_imp)
+        st.subheader("🤖 AI-Powered Grade Prediction")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("SGPA Prediction")
+            pred, r2, feat_imp = advanced_grade_prediction(st.session_state.username)
+            if pred is not None:
+                # Color based on prediction
+                if pred >= 8.5:
+                    st.success(f"🌟 Predicted SGPA: {pred}/10")
+                elif pred >= 7.5:
+                    st.info(f"✅ Predicted SGPA: {pred}/10")
+                elif pred >= 6.0:
+                    st.warning(f"⚠️ Predicted SGPA: {pred}/10")
+                else:
+                    st.error(f"❌ Predicted SGPA: {pred}/10")
+                
+                st.metric("Model Accuracy (R² Score)", f"{r2:.2%}")
+            else:
+                st.info("Not enough data for AI prediction yet.")
+        
+        with col2:
+            st.subheader("Subject Performance")
+            subject_analysis = analyze_subject_performance(st.session_state.username)
+            if subject_analysis:
+                for subject, data in subject_analysis.items():
+                    st.metric(subject.replace('_', ' ').title(), f"{data['score']:.1f} - {data['status']}")
+            else:
+                st.info("Subject data not available yet.")
+        
+        # Feature Importance
+        if feat_imp is not None:
+            st.subheader("📊 What Impacts Your Grades?")
+            top_features = feat_imp.head(5)
+            st.bar_chart(top_features.set_index('feature')['importance'])
+            st.info("These are the factors that most influence your SGPA")
+
+    # ---------- AI Insights & Analysis ----------
+    elif tab == "📊 AI Insights":
+        st.subheader("📊 Comprehensive AI Analysis Report")
+        
+        # Generate report
+        report = generate_ai_insights_report(st.session_state.username)
+        
+        st.text(report)
+        
+        # Download report
+        st.download_button(
+            label="📥 Download Report as PDF",
+            data=report,
+            file_name=f"student_insights_{st.session_state.username}_{datetime.now().strftime('%Y-%m-%d')}.txt",
+            mime="text/plain"
+        )
+        
+        # Attendance Prediction
+        st.subheader("📅 Attendance Trend Prediction")
+        att_pred = predict_attendance_trend(st.session_state.username)
+        if att_pred:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Current Attendance %", f"{att_pred['current_percentage']:.1f}%")
+            with col2:
+                st.metric("Trend", att_pred['trend'])
+            st.info(f"Pattern: {att_pred['pattern']}")
         else:
-            st.info("Not enough data for AI prediction yet.")
+            st.info("Not enough attendance data for prediction.")
+
+    # ---------- AI Personalized Study Plan ----------
+    elif tab == "🎯 AI Plan":
+        st.subheader("🎯 Your AI-Powered Personalized Study Plan")
+        
+        # Get student current data
+        if my_data.empty:
+            st.warning("No academic data available")
+            return
+        
+        # Get latest semester data
+        latest_data = my_data.iloc[-1] if len(my_data) > 0 else None
+        
+        if latest_data is not None:
+            # Generate recommendations
+            student_context = {
+                'gpa': latest_data.get('semester_gpa', 7.0),
+                'attendance': 85,  # Would fetch from attendance data
+                'year': latest_data.get('year', 1),
+                'semester': latest_data.get('semester', 1)
+            }
+            
+            plan = generate_personalized_recommendations(student_context)
+            st.markdown(plan)
+            
+            # Additional AI suggestions
+            st.subheader("💡 AI-Generated Study Tips")
+            gpa = student_context['gpa']
+            
+            tips = []
+            if gpa >= 8.5:
+                tips = [
+                    "🏆 Mentor other students - teaching reinforces your learning",
+                    "📚 Explore advanced topics in areas of interest",
+                    "🔬 Consider research internships or projects",
+                    "🎓 Prepare for postgraduate studies or certifications"
+                ]
+            elif gpa >= 7.5:
+                tips = [
+                    "📖 Dedicate 2-3 hours daily for focused study",
+                    "👥 Form study groups with peers",
+                    "💻 Practice coding/problems regularly",
+                    "🎓 Attend workshops and seminars"
+                ]
+            else:
+                tips = [
+                    "🆘 Seek tutoring support immediately",
+                    "⏰ Create a fixed study schedule (4+ hours daily)",
+                    "📝 Take detailed notes in class",
+                    "🙋 Ask questions - never hesitate!",
+                    "👨‍🏫 Meet faculty during office hours",
+                    "💪 Join support groups or peer discussions"
+                ]
+            
+            for tip in tips:
+                st.info(tip)
+            
+            # Risk Detection
+            st.subheader("⚠️ Risk Assessment")
+            if gpa < 6.0:
+                st.error("🚨 Your academic performance indicates risk of failing. Immediate action required!")
+                st.write("**Recommended Actions:**")
+                st.write("1. Meet with academic advisor ASAP")
+                st.write("2. Enroll in tutoring/remedial classes")
+                st.write("3. Communicate with parents/guardians")
+                st.write("4. Consider course withdrawal if necessary")
+            elif gpa < 7.0:
+                st.warning("⚠️ Room for significant improvement")
+            else:
+                st.success("✅ On track - Keep working hard!")

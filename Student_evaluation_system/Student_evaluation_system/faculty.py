@@ -560,9 +560,21 @@ def faculty_dashboard():
         st.subheader("📊 Student Performance")
         file = st.sidebar.file_uploader("📂 Upload Class Database", type=["csv","xlsx"])
         if file:
-            df = pd.read_csv(file) if file.name.endswith(".csv") else pd.concat(
-                pd.read_excel(file, sheet_name=None)
-            )
+            if file.name.endswith(".csv"):
+                df = pd.read_csv(file)
+            else:
+                try:
+                    df = pd.concat(pd.read_excel(file, sheet_name=None))
+                except ImportError as err:
+                    st.error(
+                        "openpyxl is required to read Excel files (.xlsx). "
+                        "Add `openpyxl` to requirements.txt and redeploy. "
+                        "You can also upload CSV as an alternative."
+                    )
+                    st.stop()
+                except Exception as err:
+                    st.error(f"Failed to read uploaded file: {err}")
+                    st.stop()
             df.columns = df.columns.str.strip().str.lower()
             year = st.selectbox("Select Year", sorted(df['year'].unique()))
             sem = st.selectbox("Select Semester", sorted(df['semester'].unique()))

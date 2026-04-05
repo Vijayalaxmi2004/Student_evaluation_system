@@ -13,8 +13,8 @@ ANNOUNCEMENT_FILE = "data/announcements.csv"
 GRADES_FILE = "data/grades_db.csv"
 
 _DB_STRUCTURE = {
-    USERS_FILE: ["username","password","role"],
-    FEEDBACK_FILE: ["rollno","year","semester","feedback"],
+    USERS_FILE: ["username","password","role", "department"],
+    FEEDBACK_FILE: ["rollno","year","semester","feedback","rating","subject_rating","faculty_rating","date"],
     ANNOUNCEMENT_FILE: ["date","title","message","posted_by"]
 }
 

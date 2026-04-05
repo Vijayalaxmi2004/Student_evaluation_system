@@ -2,3 +2,11 @@ streamlit
 pandas
 scikit-learn
 plotly
+openpyxl
+python-dotenv
+textblob
+numpy
+scipy
+joblib
+# Optional: Google Generative AI (for enhanced chatbot - not required)
+# google-generativeai

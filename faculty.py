@@ -10,6 +10,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 from utils import COURSE_STRUCTURE, plot_marks, plot_progress
 import plotly.express as px
+from ai_service import (
+    detect_at_risk_students, get_feedback_insights,
+    analyze_subject_performance, analyze_feedback_sentiment
+)
 
 GRADES_FILE = "data/grades_db.csv"
 
@@ -567,6 +571,16 @@ def faculty_dashboard():
         if st.button("📊 Mid Analysis"):
             st.session_state.faculty_tab = "mid_marks_analytics"
     with row3_c3:
+        if st.button("🚨 At-Risk Detection"):
+            st.session_state.faculty_tab = "at_risk"
+    
+    row4_c1, row4_c2, row4_c3 = st.columns(3)
+    with row4_c1:
+        if st.button("📊 Feedback Analysis"):
+            st.session_state.faculty_tab = "feedback_analysis"
+    with row4_c2:
+        pass
+    with row4_c3:
         pass  # Empty space for balance
 
 
@@ -638,11 +652,64 @@ def faculty_dashboard():
     # ================= FEEDBACK =================
     elif st.session_state.faculty_tab == "feedback":
         st.subheader("📬 Student Feedback")
-        if os.path.exists(FEEDBACK_FILE):
-            df = pd.read_csv(FEEDBACK_FILE)
-            st.dataframe(df, use_container_width=True)
+
+        # Ensure feedback file exists with expected columns
+        if not os.path.exists(FEEDBACK_FILE):
+            pd.DataFrame(columns=["rollno","year","semester","feedback","rating","subject_rating","faculty_rating","date"]).to_csv(FEEDBACK_FILE, index=False)
+
+        df = pd.read_csv(FEEDBACK_FILE)
+
+        # Load students from grades if available, otherwise use feedback roll numbers
+        student_options = []
+        if os.path.exists(GRADES_FILE):
+            grades_df = pd.read_csv(GRADES_FILE)
+            grades_df.columns = grades_df.columns.str.strip().str.lower()
+            if 'rollno' in grades_df.columns and 'name' in grades_df.columns:
+                students = grades_df[['rollno', 'name']].drop_duplicates()
+                student_options = [f"{row['rollno']} - {row['name']}" for _, row in students.iterrows()]
+
+        if not student_options:
+            student_options = sorted(df['rollno'].astype(str).unique())
+
+        student_display = st.selectbox("Select Student", student_options)
+        selected_roll = student_display.split(" - ")[0].strip()
+
+        student_feedback = df[df['rollno'].astype(str).str.lower() == selected_roll.lower()]
+        st.markdown(f"### Feedback for {student_display}")
+
+        if student_feedback.empty:
+            st.info("No feedback entries found for this student yet.")
         else:
-            st.info("No feedback yet.")
+            display_cols = [col for col in ["date","year","semester","feedback","rating","subject_rating","faculty_rating"] if col in student_feedback.columns]
+            st.dataframe(student_feedback[display_cols].sort_values(by='date', ascending=False), use_container_width=True)
+
+        st.markdown("---")
+        st.write("### Add/Update Feedback for Selected Student")
+        with st.form("faculty_student_feedback_form"):
+            year = st.selectbox("Year", [1, 2, 3, 4], index=0)
+            semester = st.selectbox("Semester", [1, 2], index=0)
+            feedback_text = st.text_area("Faculty Feedback", height=140, placeholder="Write feedback for this student...")
+            overall_rating = st.slider("Overall Rating", 1, 5, 4)
+            subject_rating = st.slider("Subject Rating", 1, 5, 4)
+            faculty_rating = st.slider("Faculty Rating", 1, 5, 4)
+
+            if st.form_submit_button("Submit Feedback"):
+                if not feedback_text.strip():
+                    st.error("Please enter feedback before submitting.")
+                else:
+                    new_entry = pd.DataFrame([{
+                        "rollno": selected_roll,
+                        "year": year,
+                        "semester": semester,
+                        "feedback": feedback_text,
+                        "rating": overall_rating,
+                        "subject_rating": subject_rating,
+                        "faculty_rating": faculty_rating,
+                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }])
+                    pd.concat([df, new_entry], ignore_index=True).to_csv(FEEDBACK_FILE, index=False)
+                    st.success("✅ Feedback added for the selected student.")
+                    st.experimental_rerun()
 
     # ================= ANNOUNCEMENTS =================
     elif st.session_state.faculty_tab == "announcements":
@@ -718,6 +785,120 @@ def faculty_dashboard():
         else:
             st.warning("⚠️ Grades database not found. Please upload student data first.")
 
+    # ================= AI: AT-RISK STUDENT DETECTION =================
+    elif st.session_state.faculty_tab == "at_risk":
+        st.subheader("🚨 AI-Powered At-Risk Student Detection")
+        st.write("Automatically identify students at risk of failing using machine learning")
+        
+        if os.path.exists(GRADES_FILE):
+            with st.spinner("🔍 Analyzing student performance..."):
+                risk_data = detect_at_risk_students(GRADES_FILE)
+            
+            if risk_data:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Students", len(risk_data['all_students']))
+                with col2:
+                    st.metric("At-Risk Students", len(risk_data['at_risk']))
+                with col3:
+                    st.metric("Risk Percentage", f"{risk_data['risk_percentage']:.1f}%")
+                
+                st.markdown("---")
+                
+                # Display at-risk students
+                st.subheader("⚠️ Students Requiring Intervention")
+                if not risk_data['at_risk'].empty:
+                    risk_display = risk_data['at_risk'][['rollno', 'name', 'year', 'semester', 'risk_score', 'risk_status']].copy()
+                    st.dataframe(risk_display, use_container_width=True)
+                    
+                    # Recommendations
+                    st.subheader("📋 Recommended Actions")
+                    st.markdown(risk_data['recommendation'])
+                    
+                    # Export report
+                    if st.button("📥 Export At-Risk Report"):
+                        csv_data = risk_display.to_csv(index=False)
+                        st.download_button(
+                            label="Download Report",
+                            data=csv_data,
+                            file_name=f"at_risk_students_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+                        )
+                else:
+                    st.success("✅ No at-risk students detected!")
+            else:
+                st.warning("⚠️ Not enough data for analysis")
+        else:
+            st.warning("⚠️ Grades database not found")
+
+    # ================= AI: FEEDBACK ANALYSIS =================
+    elif st.session_state.faculty_tab == "feedback_analysis":
+        st.subheader("📊 AI-Powered Feedback Analysis")
+        st.write("Analyze student feedback using sentiment analysis and extract actionable insights")
+        
+        if os.path.exists(FEEDBACK_FILE):
+            df_feedback = pd.read_csv(FEEDBACK_FILE)
+            
+            if not df_feedback.empty:
+                # Overall statistics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Feedback", len(df_feedback))
+                with col2:
+                    avg_rating = df_feedback['rating'].mean() if 'rating' in df_feedback.columns else 0
+                    st.metric("Average Rating", f"{avg_rating:.1f}/5 ⭐")
+                with col3:
+                    positive_count = sum(1 for fb in df_feedback['feedback'].dropna() if analyze_feedback_sentiment(str(fb))[0] > 0.1)
+                    st.metric("Positive Feedback", positive_count)
+                
+                st.markdown("---")
+                
+                # Get AI insights
+                insights = get_feedback_insights(df_feedback)
+                st.markdown(insights)
+                
+                # Subject and Faculty Ratings
+                st.subheader("⭐ Ratings Distribution")
+                if 'subject_rating' in df_feedback.columns and 'faculty_rating' in df_feedback.columns:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        subject_avg = df_feedback['subject_rating'].mean()
+                        st.metric("Average Subject Rating", f"{subject_avg:.2f}/5")
+                    with col2:
+                        faculty_avg = df_feedback['faculty_rating'].mean()
+                        st.metric("Average Faculty Rating", f"{faculty_avg:.2f}/5")
+                
+                # Detailed feedback view
+                st.subheader("📝 Detailed Feedback")
+                feedback_items = df_feedback.tail(10).copy()
+                
+                for idx, row in feedback_items.iterrows():
+                    with st.expander(f"📅 {row.get('date', 'No date')} - Year {row['year']} Sem {row['semester']}"):
+                        st.write(f"**Feedback:** {row['feedback']}")
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            polarity, sentiment, _ = analyze_feedback_sentiment(row['feedback'])
+                            st.metric("Sentiment", sentiment)
+                        with col2:
+                            st.metric("Overall Rating", f"{row.get('rating', 'N/A')}/5")
+                        with col3:
+                            st.metric("Subject Rating", f"{row.get('subject_rating', 'N/A')}/5")
+                        with col4:
+                            st.metric("Faculty Rating", f"{row.get('faculty_rating', 'N/A')}/5")
+                
+                # Export analysis
+                if st.button("📥 Export Feedback Analysis"):
+                    analysis_text = insights + "\n\n" + df_feedback.to_string()
+                    st.download_button(
+                        label="Download Analysis",
+                        data=analysis_text,
+                        file_name=f"feedback_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+                        mime="text/plain"
+                    )
+            else:
+                st.info("No feedback available yet")
+        else:
+            st.warning("⚠️ Feedback database not found")
 
     # ================= ANALYTICS / RISK =================
     elif st.session_state.faculty_tab == "analytics":

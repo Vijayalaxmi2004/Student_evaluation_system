@@ -107,20 +107,46 @@ def get_department_courses(department, year, semester):
 COURSE_STRUCTURE = DEPARTMENT_COURSES.get("CSE", {})
 
 def get_feedback(sgpa, marks_dict):
-    sorted_marks = sorted(marks_dict.items(), key=lambda x:x[1])
-    weak_sub, weak_val = sorted_marks[0]
-    strong_sub, strong_val = sorted_marks[-1]
-    if sgpa>=8.5:
-        status="Excellent"
-    elif sgpa>=7:
-        status="Good"
+    if not marks_dict:
+        return {
+            "status": "No Data",
+            "strength": "No subject data available",
+            "weakness": "No subject data available",
+            "advice": "No semester subject marks were found for this student."
+        }
+
+    sorted_marks = sorted(marks_dict.items(), key=lambda x: x[1])
+    weakest_subjects = [f"{sub} ({score})" for sub, score in sorted_marks[:2]]
+    strongest_subjects = [f"{sub} ({score})" for sub, score in sorted_marks[-2:]]
+    all_subjects = ", ".join([f"{sub} ({score})" for sub, score in sorted_marks])
+
+    if sgpa >= 8.5:
+        status = "Excellent"
+        advice = (
+            f"You have strong performance this semester, especially in {strongest_subjects[-1]}. "
+            f"Keep up the great work across all subjects: {all_subjects}. "
+            f"Continue to maintain your strengths and pay a little more attention to {weakest_subjects[0]}."
+        )
+    elif sgpa >= 7:
+        status = "Good"
+        advice = (
+            f"Your semester performance is strong, particularly in {strongest_subjects[-1]}. "
+            f"Focus on improving {weakest_subjects[0]} while maintaining performance in {strongest_subjects[-1]}. "
+            f"Review these subjects this semester: {all_subjects}."
+        )
     else:
-        status="Needs Attention"
+        status = "Needs Attention"
+        advice = (
+            f"This semester needs more attention, especially in {weakest_subjects[0]}. "
+            f"Strengthen your preparation in the weaker subjects: {', '.join(weakest_subjects)}. "
+            f"Use your stronger subjects ({strongest_subjects[-1]}) as a foundation to improve overall performance."
+        )
+
     return {
-        "status":status,
-        "strength":f"{strong_sub} ({strong_val})",
-        "weakness":f"{weak_sub} ({weak_val})",
-        "advice":f"Maintain high standard in {strong_sub}. Focus on {weak_sub}."
+        "status": status,
+        "strength": ", ".join(strongest_subjects),
+        "weakness": ", ".join(weakest_subjects),
+        "advice": advice
     }
 
 def plot_marks(marks):
