@@ -2,6 +2,12 @@
 
 A comprehensive web-based student evaluation platform built with **Streamlit**, featuring AI-powered analytics, intelligent chatbots, predictive modeling, and real-time feedback with sentiment analysis.
 
+## 🌐 **Live Application**
+
+**🚀 Try the live app here:** https://studentevaluationsystem-kzmaeoedpgx9pbzv7fb5r7.streamlit.app/
+
+---
+
 ## 🤖 NEW: AI-Powered Features ⭐
 
 ### 🚀 Powered By:
@@ -75,8 +81,8 @@ export GOOGLE_API_KEY="your_api_key_here"
 ### 3. Install & Run
 ```bash
 # Clone repository
-git clone https://github.com/<YOUR_USERNAME>/Student_Evaluation_System.git
-cd Student_Evaluation_System/Student_evaluation_system
+git clone https://github.com/Vijayalaxmi2004/Student_evaluation_system.git
+cd Student_evaluation_system
 
 # Install dependencies
 pip install -r requirements.txt
@@ -168,11 +174,11 @@ pip install -r requirements.txt --upgrade
 
 ## 🚀 Deployment
 
-### Streamlit Cloud
+### Streamlit Cloud (Recommended)
 1. Push to GitHub
 2. Go to https://share.streamlit.io
 3. Select your repository
-4. Add `GOOGLE_API_KEY` secret
+4. Add `GOOGLE_API_KEY` secret in Settings
 5. Deploy!
 
 ### Self-Hosted
@@ -257,4 +263,6 @@ This project is provided for educational purposes.
 
 **🚀 Start using AI-powered education today!**
 
-Get started with [QUICKSTART.md](QUICKSTART.md) or dive into [AI_FEATURES.md](AI_FEATURES.md)
+**🌐 Live App:** https://studentevaluationsystem-kzmaeoedpgx9pbzv7fb5r7.streamlit.app/
+
+**📖 Documentation:** [QUICKSTART.md](QUICKSTART.md) | [AI_FEATURES.md](AI_FEATURES.md)
